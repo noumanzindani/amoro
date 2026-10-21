@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Rules for the hbgapp-c3c88-amore-media bucket only.
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Chat media: only the two people in the match. A match id is the two
+    // user ids joined by '_', so membership is checked from the path itself
+    // (no Firestore lookup needed). Files are addressed by path through the
+    // SDK, never shared download URLs, so these rules apply to every read.
+    // View-once files are deleted by the receiver after viewing.
+    match /amore_chats/{matchId}/{fileName} {
+      function inMatch() {
+        return request.auth != null && request.auth.uid in matchId.split('_');
+      }
+      allow read: if inMatch();
+      allow create: if inMatch()
+        && request.resource.size < 50 * 1024 * 1024
+        && request.resource.contentType.matches('(image|video)/.*');
+      allow update: if false;
+      allow delete: if inMatch();
+    }
+
+    match /users/{uid}/photos/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && (request.resource == null
+            || (request.resource.size < 10 * 1024 * 1024
+                && request.resource.contentType.matches('image/.*')));
+    }
+  }
+}

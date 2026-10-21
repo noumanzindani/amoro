@@ -1,0 +1,53 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "hbgapp-c3c88",
+          "appId": "1:653683288960:android:75d8d89f406fc45d642f65",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "hbgapp-c3c88",
+          "appId": "1:653683288960:ios:461a9c531fbdb471642f65",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "hbgapp-c3c88",
+          "configurations": {
+            "android": "1:653683288960:android:75d8d89f406fc45d642f65",
+            "ios": "1:653683288960:ios:461a9c531fbdb471642f65"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": [
+    {
+      "bucket": "hbgapp-c3c88-amore-media",
+      "rules": "storage.rules"
+    }
+  ],
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "amore",
+      "runtime": "nodejs22",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.local",
+        "scripts"
+      ]
+    }
+  ]
+}

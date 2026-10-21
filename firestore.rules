@@ -1,0 +1,158 @@
+rules_version = '2';
+
+// Shared (default) database for hbgapp-c3c88. Deploying this file replaces
+// the rules for EVERY app in the project (HabitBeGone, Pocket Change,
+// School Management, Luna, Amore) — keep the other apps' section intact.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Other apps (unchanged behaviour) --------------------------------
+    // TEMPORARY RULES - ALLOW ALL ACCESS FOR SETUP
+    // REMOVE THESE AFTER SETUP AND USE SECURE RULES BELOW
+    // Narrowed from /{document=**} so it no longer covers Amore's
+    // collections; every other path is still fully open, exactly as before.
+    match /{collection}/{document=**} {
+      allow read, write: if !collection.matches('amore_.*');
+    }
+
+    // ---- Amore -----------------------------------------------------------
+    function signedIn() { return request.auth != null; }
+    function isMe(uid) { return signedIn() && request.auth.uid == uid; }
+    function blockPath(a, b) {
+      return /databases/$(database)/documents/amore_blocks/$(a + '_' + b);
+    }
+    function notBlocked(a, b) { return !exists(blockPath(a, b)) && !exists(blockPath(b, a)); }
+
+    // Document id is `{blocker}_{blocked}`. Both people can see a block (so
+    // each side hides the other); only the blocker can remove it.
+    match /amore_blocks/{blockId} {
+      allow get: if signedIn() && (resource == null
+        || request.auth.uid == resource.data.blocker
+        || request.auth.uid == resource.data.blocked);
+      allow list: if signedIn()
+        && (resource.data.blocker == request.auth.uid || resource.data.blocked == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['blocker', 'blocked', 'createdAt'])
+        && request.resource.data.blocker == request.auth.uid
+        && request.resource.data.blocked is string
+        && request.resource.data.blocked != request.auth.uid
+        && blockId == request.auth.uid + '_' + request.resource.data.blocked;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.blocker == request.auth.uid;
+    }
+
+    // Write-only from the app; reviewed in the Firebase console.
+    match /amore_reports/{reportId} {
+      allow read, update, delete: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['reporter', 'reported', 'reason', 'details', 'matchId', 'createdAt'])
+        && request.resource.data.reporter == request.auth.uid
+        && request.resource.data.reported is string
+        && request.resource.data.reason in ['harassment', 'inappropriate', 'spam', 'fake', 'underage', 'other']
+        && (!('details' in request.resource.data)
+            || (request.resource.data.details is string && request.resource.data.details.size() <= 500));
+    }
+
+    match /amore_users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isMe(uid);
+      allow delete: if false;
+    }
+
+    // Document id is `{from}_{to}`.
+    match /amore_swipes/{swipeId} {
+      // A single get of a missing doc (resource == null) is how a like checks
+      // for the other person's like.
+      allow get: if signedIn() && (resource == null
+        || request.auth.uid == resource.data.from
+        || request.auth.uid == resource.data.to);
+      // Queries must filter on `from == me` so the rule is provable.
+      allow list: if signedIn() && resource.data.from == request.auth.uid;
+      allow create, update: if signedIn()
+        && request.resource.data.from == request.auth.uid
+        && swipeId == request.resource.data.from + '_' + request.resource.data.to
+        && request.resource.data.liked is bool;
+      allow delete: if false;
+    }
+
+    match /amore_matches/{matchId} {
+      function participant() { return signedIn() && request.auth.uid in resource.data.users; }
+
+      allow get: if signedIn() && (resource == null || request.auth.uid in resource.data.users);
+      // Queries must filter on `users array-contains me`.
+      allow list: if signedIn() && request.auth.uid in resource.data.users;
+
+      function liked(from, to) {
+        let path = /databases/$(database)/documents/amore_swipes/$(from + '_' + to);
+        return exists(path) && get(path).data.liked == true;
+      }
+
+      // A chat exists either because both people liked each other (a match),
+      // or because one of them started it from Community. Never between
+      // people where either has blocked the other.
+      allow create: if signedIn()
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.resource.data.users[0] < request.resource.data.users[1]
+        && request.auth.uid in request.resource.data.users
+        && matchId == request.resource.data.users[0] + '_' + request.resource.data.users[1]
+        && notBlocked(request.resource.data.users[0], request.resource.data.users[1])
+        && (
+          (liked(request.resource.data.users[0], request.resource.data.users[1])
+            && liked(request.resource.data.users[1], request.resource.data.users[0]))
+          || (request.resource.data.get('source', '') == 'community'
+            && request.resource.data.startedBy == request.auth.uid
+            && request.resource.data.keys().hasOnly(['users', 'createdAt', 'source', 'startedBy']))
+        );
+
+      // Chat state only: preview, per-user unread counts, read marks, typing.
+      allow update: if participant()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['lastMessage', 'lastMessageAt', 'lastSenderId', 'unreadCount', 'lastRead', 'typing'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSenderId'])
+            || request.resource.data.lastSenderId == request.auth.uid);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function inMatch() {
+          return signedIn() && request.auth.uid in
+            get(/databases/$(database)/documents/amore_matches/$(matchId)).data.users;
+        }
+        function isText() {
+          return request.resource.data.type == 'text'
+            && request.resource.data.keys().hasOnly(['type', 'text', 'senderId', 'createdAt'])
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000;
+        }
+        function isMedia() {
+          return request.resource.data.type in ['photo', 'video']
+            && request.resource.data.keys().hasOnly(['type', 'mediaPath', 'viewOnce', 'senderId', 'createdAt'])
+            && request.resource.data.mediaPath is string
+            && request.resource.data.mediaPath.matches('amore_chats/' + matchId + '/[^/]+')
+            && request.resource.data.viewOnce is bool;
+        }
+
+        allow read: if inMatch();
+        function otherInMatch() {
+          let users = get(/databases/$(database)/documents/amore_matches/$(matchId)).data.users;
+          return users[0] == request.auth.uid ? users[1] : users[0];
+        }
+
+        allow create: if inMatch()
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && notBlocked(request.auth.uid, otherInMatch())
+          && (isText() || isMedia());
+        // The receiver marks a view-once item opened, exactly once.
+        allow update: if inMatch()
+          && resource.data.get('viewOnce', false) == true
+          && resource.data.senderId != request.auth.uid
+          && resource.data.get('openedAt', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['openedAt'])
+          && request.resource.data.openedAt == request.time;
+        allow delete: if false;
+      }
+    }
+  }
+}
