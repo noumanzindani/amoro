@@ -55,8 +55,14 @@ service cloud.firestore {
 
     match /amore_users/{uid} {
       allow read: if signedIn();
-      allow create, update: if isMe(uid);
+      // Push tokens are never stored on the public profile.
+      allow create, update: if isMe(uid) && !request.resource.data.keys().hasAny(['fcmTokens']);
       allow delete: if false;
+
+      // Owner-only: this device's push tokens.
+      match /private/{docId} {
+        allow read, write: if isMe(uid);
+      }
     }
 
     // Document id is `{from}_{to}`.

@@ -35,7 +35,8 @@ function bodyFor(msg) {
 
 /** Sends to every device of `uid` and prunes tokens FCM reports as dead. */
 async function notifyUser(uid, { title, body, data }) {
-  const userRef = db.collection('amore_users').doc(uid);
+  // Tokens live in a private doc only the owner (and admin) can read.
+  const userRef = db.collection('amore_users').doc(uid).collection('private').doc('devices');
   const snap = await userRef.get();
   const tokens = snap.get('fcmTokens') || [];
   if (tokens.length === 0) return;

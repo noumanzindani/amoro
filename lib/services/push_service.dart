@@ -15,7 +15,8 @@ import '../backend.dart';
 import '../providers/session_provider.dart';
 import '../theme.dart';
 
-/// Registers this device for push (token stored on amore_users/{uid}.fcmTokens),
+/// Registers this device for push (token stored privately at
+/// amore_users/{uid}/private/devices — never on the public profile),
 /// opens the right chat when a notification is tapped, and shows an in-app
 /// banner for pushes that arrive while the app is open.
 class PushService {
@@ -70,12 +71,15 @@ class PushService {
     }
   }
 
+  DocumentReference<Map<String, dynamic>> _devices(String uid) =>
+      Backend.users.doc(uid).collection('private').doc('devices');
+
   Future<void> _saveToken(String token) async {
     final uid = session.uid;
     if (uid == null) return;
-    await Backend.users.doc(uid).update({
+    await _devices(uid).set({
       'fcmTokens': FieldValue.arrayUnion([token]),
-    });
+    }, SetOptions(merge: true));
   }
 
   /// Call before signing out so this phone stops getting that user's pushes.
@@ -85,9 +89,9 @@ class PushService {
     try {
       final token = await _fcm.getToken();
       if (uid != null && token != null) {
-        await Backend.users.doc(uid).update({
+        await _devices(uid).set({
           'fcmTokens': FieldValue.arrayRemove([token]),
-        });
+        }, SetOptions(merge: true));
       }
       await _fcm.deleteToken();
     } catch (e) {
