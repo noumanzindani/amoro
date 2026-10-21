@@ -14,11 +14,23 @@
  */
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
+const { randomUUID } = require('crypto');
 
 const PROJECT_ID = 'hbgapp-c3c88';
 process.env.GOOGLE_CLOUD_QUOTA_PROJECT ??= PROJECT_ID;
-initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
+const BUCKET = 'hbgapp-c3c88-amore-media';
+initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID, storageBucket: BUCKET });
 const db = getFirestore();
+const bucket = getStorage().bucket();
+
+// pravatar.cc portraits (1000px source), hand-picked: adults, one person,
+// clear face. Numbers are pravatar `img` ids.
+const PHOTOS = {
+  woman: [5, 9, 10, 16, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 38, 41, 43, 44, 45, 47, 48, 49],
+  man: [3, 11, 12, 13, 14, 18, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 67, 68],
+  nonbinary: [33, 15, 7],
+};
 
 const args = process.argv.slice(2);
 const CLEAN = args.includes('--clean');
@@ -71,8 +83,6 @@ const BIOS = [
 function profile(i) {
   const gender = i % 9 === 8 ? 'nonbinary' : i % 2 === 0 ? 'woman' : 'man';
   const names = gender === 'man' ? MEN : gender === 'woman' ? WOMEN : [...WOMEN, ...MEN];
-  const photoGender = gender === 'man' ? 'men' : 'women';
-  const photoIndex = (i * 7) % 99;
   const age = 21 + Math.floor(rand() * 18);
   const birth = new Date(Date.UTC(2026 - age, Math.floor(rand() * 12), 1 + Math.floor(rand() * 27)));
   const interestedIn = gender === 'woman' ? pick([['man'], ['man'], ['man', 'nonbinary'], ['woman', 'man']])
@@ -96,7 +106,7 @@ function profile(i) {
     kidsHave: maybe(0.7, pick(KIDS_HAVE)),
     kidsWant: maybe(0.7, pick(KIDS_WANT)),
     bio: maybe(0.85, pick(BIOS)),
-    photoUrls: [`https://randomuser.me/api/portraits/${photoGender}/${photoIndex}.jpg`],
+    photoUrls: [], // filled by uploadPhoto()
     onboardingStep: 17,
     onboardingComplete: true,
     createdAt,
@@ -106,6 +116,25 @@ function profile(i) {
 }
 
 const seedId = (i) => `seedUser${String(i + 1).padStart(2, '0')}`;
+
+/** The n-th seed person of a gender gets the n-th photo of that gender. */
+function photoFor(gender, nth) {
+  const list = PHOTOS[gender];
+  return list[nth % list.length];
+}
+
+/** Copies the portrait into Amore's bucket and returns a token download URL. */
+async function uploadPhoto(uid, img) {
+  const res = await fetch(`https://i.pravatar.cc/800?img=${img}`);
+  if (!res.ok) throw new Error(`photo ${img}: HTTP ${res.status}`);
+  const path = `users/${uid}/photos/main.jpg`;
+  const token = randomUUID();
+  await bucket.file(path).save(Buffer.from(await res.arrayBuffer()), {
+    contentType: 'image/jpeg',
+    metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+  });
+  return `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
+}
 
 async function commitAll(writes) {
   for (let i = 0; i < writes.length; i += 400) {
@@ -117,6 +146,12 @@ async function commitAll(writes) {
 
 async function seed() {
   const people = Array.from({ length: COUNT }, (_, i) => [seedId(i), profile(i)]);
+  const perGender = {};
+  await Promise.all(people.map(async ([id, p]) => {
+    const nth = (perGender[p.gender] = (perGender[p.gender] ?? -1) + 1);
+    p.photoUrls = [await uploadPhoto(id, photoFor(p.gender, nth))];
+  }));
+  console.log(`✔ ${people.length} portraits uploaded to gs://${BUCKET}`);
   await commitAll(people.map(([id, data]) => (b) => b.set(db.collection('amore_users').doc(id), data)));
   console.log(`✔ ${people.length} seed profiles written to amore_users`);
 
@@ -151,6 +186,7 @@ async function clean() {
     .filter((d) => ids.has(d.get('blocked')) || ids.has(d.get('blocker')));
 
   for (const m of matches) await db.recursiveDelete(m.ref); // includes messages
+  await bucket.deleteFiles({ prefix: 'users/seedUser' });
   await commitAll([...users.docs, ...swipes.docs, ...toSeed, ...blocks].map((d) => (b) => b.delete(d.ref)));
   console.log(`✔ removed ${users.size} profiles, ${swipes.size + toSeed.length} swipes, `
     + `${matches.length} chats, ${blocks.length} blocks`);
