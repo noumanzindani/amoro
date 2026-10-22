@@ -17,10 +17,33 @@ const _notChips = {
   'interests',
 };
 
+const _chipTypes = {
+  QuestionType.text,
+  QuestionType.height,
+  QuestionType.scale,
+  QuestionType.single,
+  QuestionType.multi,
+};
+
+/// Short public answers become chips; long text and photos get their own
+/// section ([profileSections]); private answers never show.
+bool showsAsChip(ProfileQuestion q) =>
+    !q.private && !_notChips.contains(q.id) && _chipTypes.contains(q.type);
+
+/// Public long-text and photo questions shown as titled sections on the
+/// full profile (bio and the main photo are shown elsewhere).
+List<ProfileQuestion> profileSections(List<ProfileQuestion> questions) => [
+  for (final q in questions)
+    if (!q.private &&
+        ((q.type == QuestionType.longText && q.id != 'bio') ||
+            (q.type == QuestionType.photos && q.id != 'photoUrls')))
+      q,
+];
+
 /// Answer chips for a profile, e.g. "💍 Long-term relationship".
 List<String> profileChips(AppUser user, List<ProfileQuestion> questions) => [
   for (final q in questions)
-    if (!q.private && !_notChips.contains(q.id))
+    if (showsAsChip(q))
       if (q.format(user[q.id]) case final text?)
         q.chipIcon == null ? text : '${q.chipIcon} $text',
 ];
@@ -240,6 +263,39 @@ class ProfileDetails extends StatelessWidget {
             children: [for (final c in interests) Chip(label: Text(c))],
           ),
         ],
+        for (final q in profileSections(questions))
+          if (user[q.id] case final answer?
+              when answer is! List || answer.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text(
+              q.title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (q.type == QuestionType.longText)
+              Text('$answer', style: theme.textTheme.bodyLarge)
+            else
+              SizedBox(
+                height: 200,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: (answer as List).length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: AspectRatio(
+                      aspectRatio: 3 / 4,
+                      child: CachedNetworkImage(
+                        imageUrl: answer[i] as String,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         for (final url in user.photoUrls.skip(1)) ...[
           const SizedBox(height: 16),
           ClipRRect(

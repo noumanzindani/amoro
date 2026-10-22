@@ -14,6 +14,7 @@ import '../providers/session_provider.dart';
 import '../screens/chat/media_viewer_screen.dart';
 import '../services/storage_service.dart';
 import 'questions.dart';
+import '../theme.dart';
 import '../widgets/ui.dart';
 
 /// The answer control for any [ProfileQuestion]. Stateless about the value:
@@ -236,8 +237,16 @@ class _ChoiceAnswer extends StatelessWidget {
     required this.multi,
   });
 
+  void _toggle(String value, bool on) {
+    if (!multi) return onChanged(on ? [value] : const []);
+    final next = [...selected];
+    on ? next.add(value) : next.remove(value);
+    onChanged(next);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (question.hasImageOptions) return _imageGrid(context);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -247,11 +256,92 @@ class _ChoiceAnswer extends StatelessWidget {
             label: Text(o.display),
             selected: selected.contains(o.value),
             showCheckmark: multi,
-            onSelected: (on) {
-              if (!multi) return onChanged(on ? [o.value] : const []);
-              final next = [...selected];
-              on ? next.add(o.value) : next.remove(o.value);
-              onChanged(next);
+            onSelected: (on) => _toggle(o.value, on),
+          ),
+      ],
+    );
+  }
+
+  /// Picture answers: options with images are tapped as tiles.
+  Widget _imageGrid(BuildContext context) {
+    final theme = Theme.of(context);
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 0.8,
+      children: [
+        for (final o in question.options)
+          Builder(
+            builder: (context) {
+              final on = selected.contains(o.value);
+              final url = o.imageUrl;
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _toggle(o.value, !on),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: on ? AppColors.rose : AppColors.outline,
+                      width: on ? 3 : 1,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (url != null)
+                              CachedNetworkImage(
+                                imageUrl: url,
+                                fit: BoxFit.cover,
+                              )
+                            else
+                              Center(
+                                child: Text(
+                                  o.emoji ?? '',
+                                  style: const TextStyle(fontSize: 40),
+                                ),
+                              ),
+                            if (on)
+                              const Positioned(
+                                top: 6,
+                                right: 6,
+                                child: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: AppColors.rose,
+                                  child: Icon(
+                                    Icons.check,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          o.display,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             },
           ),
       ],

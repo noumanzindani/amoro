@@ -1,4 +1,5 @@
 import 'package:amore/onboarding/questions.dart';
+import 'package:amore/widgets/profile_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -151,5 +152,45 @@ void main() {
     );
     expect(dependentsOf('gender', defaultQuestions, value: 'man'), isEmpty);
     expect(genderValueMismatch(defaultQuestions), isEmpty);
+  });
+
+  group('profile display', () {
+    ProfileQuestion custom(String id, Map<String, dynamic> m) =>
+        ProfileQuestion.fromMap(id, {'group': 'about', 'title': id, ...m})!;
+
+    test('showsAsChip only for short public answers', () {
+      for (final id in [
+        'name',
+        'birthDate',
+        'gender',
+        'interestedIn',
+        'bio',
+        'photoUrls',
+        'interests',
+        'privatePhotos',
+        'attractionMen',
+      ]) {
+        expect(showsAsChip(q(id)), isFalse, reason: id);
+      }
+      expect(showsAsChip(q('lookingFor')), isTrue);
+      expect(showsAsChip(custom('story', {'type': 'longText'})), isFalse);
+      expect(showsAsChip(custom('pics', {'type': 'photos'})), isFalse);
+      expect(
+        showsAsChip(custom('clip', {'type': 'video', 'private': true})),
+        isFalse,
+      );
+    });
+
+    test('profileSections lists public long text and photo questions', () {
+      final qs = [
+        q('bio'),
+        q('photoUrls'),
+        custom('story', {'type': 'longText'}),
+        custom('secret', {'type': 'longText', 'private': true}),
+        custom('pics', {'type': 'photos', 'maxSelect': 3}),
+        q('privatePhotos'),
+      ];
+      expect(profileSections(qs).map((q) => q.id), ['story', 'pics']);
+    });
   });
 }
