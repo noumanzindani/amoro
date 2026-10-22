@@ -22,16 +22,23 @@ const auth = getAuth();
 
 const [command, email, ...flags] = process.argv.slice(2);
 
+// Anyone can sign up in this shared project, so an existing account with
+// this email may belong to someone else. --create therefore refuses to reuse
+// one, and granting to an existing account requires a verified email.
 async function findOrCreate(address) {
-  try {
-    return await auth.getUserByEmail(address);
-  } catch (e) {
-    if (e.code !== 'auth/user-not-found' || !flags.includes('--create')) throw e;
+  if (flags.includes('--create')) {
     const password = process.env.ADMIN_PASSWORD;
     if (!password) throw new Error('set ADMIN_PASSWORD to create the account');
     console.log(`creating account ${address}`);
     return auth.createUser({ email: address, password, emailVerified: true });
   }
+  const user = await auth.getUserByEmail(address);
+  if (!user.emailVerified) {
+    throw new Error(`${address} has not verified its email; not granting admin`);
+  }
+  const providers = user.providerData.map((p) => p.providerId).join(', ');
+  console.log(`account ${user.uid} (sign-in: ${providers || 'none'})`);
+  return user;
 }
 
 async function add() {

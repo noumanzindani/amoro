@@ -23,7 +23,10 @@ service cloud.firestore {
     }
     function notBlocked(a, b) { return !exists(blockPath(a, b)) && !exists(blockPath(b, a)); }
     // Admins carry the custom claim `amoreAdmin` (functions/scripts/admin.js).
-    function isAdmin() { return signedIn() && request.auth.token.get('amoreAdmin', false) == true; }
+    function isAdmin() {
+      return signedIn() && request.auth.token.get('amoreAdmin', false) == true
+        && request.auth.token.get('email_verified', false) == true;
+    }
 
     // Onboarding questions, managed in the admin panel.
     match /amore_questions/{qid} {
