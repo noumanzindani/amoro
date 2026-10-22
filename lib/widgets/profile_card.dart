@@ -17,14 +17,14 @@ const _notChips = {
 
 /// Answer chips for a profile, e.g. "💍 Long-term relationship".
 List<String> profileChips(AppUser user) => [
-  for (final q in profileQuestions)
+  for (final q in defaultQuestions)
     if (!_notChips.contains(q.id))
       if (q.format(user[q.id]) case final text?)
         q.chipIcon == null ? text : '${q.chipIcon} $text',
 ];
 
 List<String> interestChips(AppUser user) {
-  final q = profileQuestions.firstWhere((q) => q.id == 'interests');
+  final q = defaultQuestions.firstWhere((q) => q.id == 'interests');
   final values = List<String>.from(user['interests'] ?? const []);
   return [
     for (final o in q.options)

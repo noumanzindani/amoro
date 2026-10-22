@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   ProfileQuestion q(String id) =>
-      profileQuestions.firstWhere((q) => q.id == id);
+      defaultQuestions.firstWhere((q) => q.id == id);
   Timestamp yearsAgo(int years, {int days = 0}) {
     final now = DateTime.now();
     return Timestamp.fromDate(

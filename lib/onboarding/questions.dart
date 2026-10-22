@@ -30,15 +30,75 @@ class QuestionOption {
   final String value;
   final String label;
   final String? emoji;
-  const QuestionOption(this.value, this.label, [this.emoji]);
+
+  /// Picture answers: an image the user taps instead of a chip.
+  final String? imageUrl;
+  const QuestionOption(this.value, this.label, [this.emoji, this.imageUrl]);
 
   String get display => emoji == null ? label : '$emoji $label';
+
+  Map<String, dynamic> toMap() => {
+    'value': value,
+    'label': label,
+    if (emoji != null) 'emoji': emoji,
+    if (imageUrl != null) 'imageUrl': imageUrl,
+  };
+
+  static QuestionOption? fromMap(Object? m) {
+    if (m is! Map) return null;
+    final value = m['value'], label = m['label'];
+    if (value is! String || label is! String) return null;
+    return QuestionOption(
+      value,
+      label,
+      m['emoji'] as String?,
+      m['imageUrl'] as String?,
+    );
+  }
 }
+
+/// "Ask this only if [questionId]'s answer is one of [values]". For a
+/// multi-choice answer, any overlap counts. No answer means no match.
+class ShowIf {
+  final String questionId;
+  final List<String> values;
+  const ShowIf(this.questionId, this.values);
+
+  bool matches(Map<String, dynamic> answers) {
+    final answer = answers[questionId];
+    if (answer is String) return values.contains(answer);
+    if (answer is List) return answer.any(values.contains);
+    return false;
+  }
+
+  Map<String, dynamic> toMap() => {'questionId': questionId, 'values': values};
+
+  static ShowIf? fromMap(Object? m) {
+    if (m is! Map) return null;
+    final id = m['questionId'], values = m['values'];
+    if (id is! String || values is! List) return null;
+    return ShowIf(id, values.whereType<String>().toList());
+  }
+}
+
+/// Core questions the app's logic reads directly (matching, age, photo).
+/// The admin panel can reword them but not delete them.
+const systemQuestionIds = {
+  'name',
+  'birthDate',
+  'gender',
+  'interestedIn',
+  'photoUrls',
+};
+
+final _questionId = RegExp(r'^[A-Za-z][A-Za-z0-9]{0,29}$');
+final _optionValue = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_]*$');
 
 /// One profile question. The same definition drives the one-per-screen
 /// onboarding flow and the Profile → Edit screen. The answer is stored on
 /// the user document under [id], or in the owner-only private doc if
-/// [private].
+/// [private]. Questions live in `amore_questions/{id}` (managed in the admin
+/// panel); [defaultQuestions] is the built-in set and offline fallback.
 class ProfileQuestion {
   final String id;
   final QuestionGroup group;
@@ -55,12 +115,16 @@ class ProfileQuestion {
   /// read. Private photos are kept as Storage paths in an owner-only folder.
   final bool private;
 
-  /// When set, the question is only asked (and only required) if this
-  /// returns true for the answers given so far, e.g. [isWoman].
-  final bool Function(Map<String, dynamic> answers)? showIf;
+  /// When set, the question is only asked (and only required) if it
+  /// matches the answers given so far.
+  final ShowIf? showIf;
 
   /// For [QuestionType.video]: the exact length the recording must be.
-  final Duration? videoLength;
+  final int? videoSeconds;
+
+  /// Position in the flow (admin panel), and whether it's asked at all.
+  final double order;
+  final bool active;
 
   /// For [QuestionType.scale]: the slider's range, the words under each
   /// end, and how a value reads (e.g. "7 / 10").
@@ -68,7 +132,9 @@ class ProfileQuestion {
   final int scaleMax;
   final String? lowLabel;
   final String? highLabel;
-  final String Function(int value)? scaleFormat;
+
+  /// How a value reads; `{v}` is replaced by the value, e.g. "{v} / 10".
+  final String? scaleFormat;
 
   /// Shown before the answer on profile chips so "No" reads as "🚬 No".
   final String? chipIcon;
@@ -86,7 +152,9 @@ class ProfileQuestion {
     this.maxLength,
     this.private = false,
     this.showIf,
-    this.videoLength,
+    this.videoSeconds,
+    this.order = 0,
+    this.active = true,
     this.scaleMin = 0,
     this.scaleMax = 10,
     this.lowLabel,
@@ -95,7 +163,80 @@ class ProfileQuestion {
     this.chipIcon,
   });
 
-  bool appliesTo(Map<String, dynamic> answers) => showIf?.call(answers) ?? true;
+  bool appliesTo(Map<String, dynamic> answers) =>
+      showIf?.matches(answers) ?? true;
+
+  Duration? get videoLength =>
+      videoSeconds == null ? null : Duration(seconds: videoSeconds!);
+
+  bool get system => systemQuestionIds.contains(id);
+
+  bool get hasImageOptions => options.any((o) => o.imageUrl != null);
+
+  /// Firestore shape for `amore_questions/{id}` (the id is the doc id).
+  Map<String, dynamic> toMap() => {
+    'group': group.name,
+    'type': type.name,
+    'title': title,
+    if (subtitle != null) 'subtitle': subtitle,
+    if (options.isNotEmpty) 'options': [for (final o in options) o.toMap()],
+    'required': required,
+    'private': private,
+    'active': active,
+    'order': order,
+    if (minSelect != null) 'minSelect': minSelect,
+    if (maxSelect != null) 'maxSelect': maxSelect,
+    if (maxLength != null) 'maxLength': maxLength,
+    if (showIf != null) 'showIf': showIf!.toMap(),
+    if (videoSeconds != null) 'videoSeconds': videoSeconds,
+    if (type == QuestionType.scale) ...{
+      'scaleMin': scaleMin,
+      'scaleMax': scaleMax,
+    },
+    if (lowLabel != null) 'lowLabel': lowLabel,
+    if (highLabel != null) 'highLabel': highLabel,
+    if (scaleFormat != null) 'scaleFormat': scaleFormat,
+    if (chipIcon != null) 'chipIcon': chipIcon,
+  };
+
+  /// Null when the document can't be understood (unknown type or section,
+  /// no title), so a bad document is skipped instead of crashing the app.
+  static ProfileQuestion? fromMap(String id, Map<String, dynamic> m) {
+    final type = _byName(QuestionType.values, m['type']);
+    final group = _byName(QuestionGroup.values, m['group']);
+    final title = m['title'];
+    if (type == null || group == null || title is! String || title.isEmpty) {
+      return null;
+    }
+    int? asInt(Object? v) => v is num ? v.toInt() : null;
+    String? asString(Object? v) => v is String ? v : null;
+    return ProfileQuestion(
+      id: id,
+      group: group,
+      type: type,
+      title: title,
+      subtitle: asString(m['subtitle']),
+      options: [
+        for (final o in (m['options'] as List? ?? const []))
+          ?QuestionOption.fromMap(o),
+      ],
+      required: m['required'] == true,
+      private: m['private'] == true,
+      active: m['active'] != false,
+      order: (m['order'] as num?)?.toDouble() ?? 0,
+      minSelect: asInt(m['minSelect']),
+      maxSelect: asInt(m['maxSelect']),
+      maxLength: asInt(m['maxLength']),
+      showIf: ShowIf.fromMap(m['showIf']),
+      videoSeconds: asInt(m['videoSeconds']),
+      scaleMin: asInt(m['scaleMin']) ?? 0,
+      scaleMax: asInt(m['scaleMax']) ?? 10,
+      lowLabel: asString(m['lowLabel']),
+      highLabel: asString(m['highLabel']),
+      scaleFormat: asString(m['scaleFormat']),
+      chipIcon: asString(m['chipIcon']),
+    );
+  }
 
   /// Human-readable answer for profile views and cards; null if unanswered.
   String? format(dynamic value) {
@@ -112,7 +253,7 @@ class ProfileQuestion {
         return formatHeight(value as int);
       case QuestionType.scale:
         final v = value as int;
-        return scaleFormat?.call(v) ?? '$v';
+        return scaleFormat?.replaceAll('{v}', '$v') ?? '$v';
       case QuestionType.single:
         return _option(value as String)?.display;
       case QuestionType.multi:
@@ -136,10 +277,131 @@ class ProfileQuestion {
   }
 }
 
-bool isWoman(Map<String, dynamic> answers) => answers['gender'] == 'woman';
+T? _byName<T extends Enum>(List<T> values, Object? name) {
+  for (final v in values) {
+    if (v.name == name) return v;
+  }
+  return null;
+}
 
-String outOfTen(int v) => '$v / 10';
-String ageYears(int v) => 'Age $v';
+/// A camelCase id from free text ("Do you smoke?" → "doYouSmoke"), starting
+/// with a letter, at most 30 characters, and not already in [taken].
+String slugId(String text, Set<String> taken) {
+  final words = text
+      .split(RegExp(r'[^A-Za-z0-9]+'))
+      .where((w) => w.isNotEmpty)
+      .map((w) => w.toLowerCase())
+      .toList();
+  var base = [
+    for (var i = 0; i < words.length; i++)
+      i == 0 ? words[i] : words[i][0].toUpperCase() + words[i].substring(1),
+  ].join();
+  if (base.isEmpty) base = 'question';
+  if (!RegExp('^[a-z]').hasMatch(base)) {
+    base = 'q${base[0].toUpperCase()}${base.substring(1)}';
+  }
+  if (base.length > 28) base = base.substring(0, 28); // room for a suffix
+  if (!taken.contains(base)) return base;
+  for (var n = 2; ; n++) {
+    if (!taken.contains('$base$n')) return '$base$n';
+  }
+}
+
+/// Problems with an admin's question [draft] (the `toMap` shape); empty when
+/// it can be saved.
+List<String> validateQuestionDefinition(
+  Map<String, dynamic> draft, {
+  required String id,
+  required bool isNew,
+  required Set<String> existingIds,
+}) {
+  final errors = <String>[];
+  if (!_questionId.hasMatch(id)) {
+    errors.add(
+      'ID must start with a letter and use only letters and numbers '
+      '(max 30).',
+    );
+  }
+  if (isNew && existingIds.contains(id)) {
+    errors.add('A question with ID "$id" already exists.');
+  }
+  final title = draft['title'];
+  if (title is! String || title.trim().isEmpty) errors.add('Add a title.');
+  final type = _byName(QuestionType.values, draft['type']);
+  if (type == null) errors.add('Choose a question type.');
+  if (_byName(QuestionGroup.values, draft['group']) == null) {
+    errors.add('Choose a section.');
+  }
+  int? asInt(Object? v) => v is num ? v.toInt() : null;
+  final min = asInt(draft['minSelect']), max = asInt(draft['maxSelect']);
+  if (min != null && max != null && min > max) {
+    errors.add('Minimum can\'t be more than maximum.');
+  }
+
+  if (type == QuestionType.single || type == QuestionType.multi) {
+    final options = draft['options'] as List? ?? const [];
+    if (options.isEmpty) errors.add('Add at least one option.');
+    final seen = <String>{};
+    for (final o in options) {
+      final value = o is Map ? o['value'] : null;
+      final label = o is Map ? o['label'] : null;
+      if (label is! String || label.trim().isEmpty) {
+        errors.add('Every option needs a label.');
+      }
+      if (value is! String || !_optionValue.hasMatch(value)) {
+        errors.add('Option value "$value" is not valid.');
+      } else if (!seen.add(value)) {
+        errors.add('Two options share the value "$value".');
+      }
+    }
+  }
+  if (type == QuestionType.photos && (max == null || max < 1 || max > 10)) {
+    errors.add('Photo questions allow 1 to 10 photos.');
+  }
+  if (type == QuestionType.scale &&
+      (asInt(draft['scaleMin']) ?? 0) >= (asInt(draft['scaleMax']) ?? 10)) {
+    errors.add('The slider\'s minimum must be below its maximum.');
+  }
+  if (type == QuestionType.video) {
+    final seconds = asInt(draft['videoSeconds']);
+    if (seconds == null || seconds < 5 || seconds > 180) {
+      errors.add('Video length must be 5 to 180 seconds.');
+    }
+    if (draft['private'] != true) errors.add('Videos are always private.');
+  }
+  final showIf = ShowIf.fromMap(draft['showIf']);
+  if (showIf != null && showIf.questionId == id) {
+    errors.add('A question can\'t depend on itself.');
+  }
+  return errors;
+}
+
+/// Questions whose "show only if" points at [questionId] (and [value]).
+List<ProfileQuestion> dependentsOf(
+  String questionId,
+  List<ProfileQuestion> all, {
+  String? value,
+}) => [
+  for (final q in all)
+    if (q.showIf?.questionId == questionId &&
+        (value == null || q.showIf!.values.contains(value)))
+      q,
+];
+
+/// Values offered in only one of gender / interested-in. Matching compares
+/// them, so they should list the same values.
+Set<String> genderValueMismatch(List<ProfileQuestion> all) {
+  Set<String>? valuesOf(String id) {
+    for (final q in all) {
+      if (q.id == id) return {for (final o in q.options) o.value};
+    }
+    return null;
+  }
+
+  final gender = valuesOf('gender'), wanted = valuesOf('interestedIn');
+  if (gender == null || wanted == null) return {};
+  return gender.difference(wanted).union(wanted.difference(gender));
+}
 
 /// "30 seconds", "2 minutes", "1 min 30 s".
 String formatVideoLength(Duration d) {
@@ -215,7 +477,7 @@ const _yesSometimesNo = [
 ];
 
 /// Display order is onboarding order.
-const List<ProfileQuestion> profileQuestions = [
+const List<ProfileQuestion> defaultQuestions = [
   ProfileQuestion(
     id: 'name',
     group: QuestionGroup.basics,
@@ -410,7 +672,7 @@ const List<ProfileQuestion> profileQuestions = [
     private: true,
     lowLabel: 'Not at all',
     highLabel: 'Very',
-    scaleFormat: outOfTen,
+    scaleFormat: '{v} / 10',
   ),
   ProfileQuestion(
     id: 'attractionMen',
@@ -421,7 +683,7 @@ const List<ProfileQuestion> profileQuestions = [
     private: true,
     lowLabel: 'Not at all',
     highLabel: 'Very',
-    scaleFormat: outOfTen,
+    scaleFormat: '{v} / 10',
   ),
   ProfileQuestion(
     id: 'firstSexualAwarenessAge',
@@ -434,7 +696,7 @@ const List<ProfileQuestion> profileQuestions = [
     scaleMax: 30,
     lowLabel: '5 or younger',
     highLabel: '30+',
-    scaleFormat: ageYears,
+    scaleFormat: 'Age {v}',
   ),
   ProfileQuestion(
     id: 'bio',
@@ -464,7 +726,7 @@ const List<ProfileQuestion> profileQuestions = [
     minSelect: 3,
     maxSelect: 3,
     private: true,
-    showIf: isWoman,
+    showIf: ShowIf('gender', ['woman']),
   ),
   ProfileQuestion(
     id: 'privateVideo',
@@ -474,8 +736,8 @@ const List<ProfileQuestion> profileQuestions = [
     subtitle: 'Only you can see this',
     required: true,
     private: true, // stored as a Storage path in the owner-only folder
-    showIf: isWoman,
-    videoLength: Duration(seconds: 30),
+    showIf: ShowIf('gender', ['woman']),
+    videoSeconds: 30,
   ),
   ProfileQuestion(
     id: 'privateVideoLong',
@@ -485,6 +747,6 @@ const List<ProfileQuestion> profileQuestions = [
     subtitle: 'Only you can see this',
     required: true,
     private: true, // everyone records this one
-    videoLength: Duration(seconds: 120),
+    videoSeconds: 120,
   ),
 ];

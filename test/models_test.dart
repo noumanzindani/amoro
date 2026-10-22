@@ -33,7 +33,7 @@ void main() {
 
   group('ProfileQuestion.format', () {
     ProfileQuestion q(String id) =>
-        profileQuestions.firstWhere((q) => q.id == id);
+        defaultQuestions.firstWhere((q) => q.id == id);
 
     test('single choice shows the label with emoji', () {
       expect(q('lookingFor').format('long_term'), '💍 Long-term relationship');
@@ -58,7 +58,7 @@ void main() {
   });
 
   test('question ids are unique', () {
-    final ids = profileQuestions.map((q) => q.id).toList();
+    final ids = defaultQuestions.map((q) => q.id).toList();
     expect(ids.toSet().length, ids.length);
   });
 

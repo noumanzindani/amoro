@@ -31,7 +31,7 @@ class EditProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
-            for (final q in profileQuestions.where(
+            for (final q in defaultQuestions.where(
               (q) => q.group == group && q.appliesTo(session.allAnswers),
             ))
               ListTile(

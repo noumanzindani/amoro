@@ -22,20 +22,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   late final PageController _pages = PageController(initialPage: _step);
   bool _saving = false;
 
-  ProfileQuestion get _question => profileQuestions[_step];
+  ProfileQuestion get _question => defaultQuestions[_step];
   bool get _isLast => _nextFrom(_step) == null;
 
-  bool _applies(int i) => profileQuestions[i].appliesTo(_answers);
+  bool _applies(int i) => defaultQuestions[i].appliesTo(_answers);
 
   /// Indices of the questions this user is asked (e.g. women-only steps
   /// drop out for everyone else).
   List<int> get _flow => [
-    for (var i = 0; i < profileQuestions.length; i++)
+    for (var i = 0; i < defaultQuestions.length; i++)
       if (_applies(i)) i,
   ];
 
   int? _nextFrom(int i) {
-    for (var j = i + 1; j < profileQuestions.length; j++) {
+    for (var j = i + 1; j < defaultQuestions.length; j++) {
       if (_applies(j)) return j;
     }
     return null;
@@ -52,7 +52,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _resumeStep() {
     final saved = _session.profile!.onboardingStep.clamp(
       0,
-      profileQuestions.length - 1,
+      defaultQuestions.length - 1,
     );
     if (_applies(saved)) return saved;
     return _nextFrom(saved) ?? _prevFrom(saved) ?? 0;
@@ -140,9 +140,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: PageView.builder(
         controller: _pages,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: profileQuestions.length,
+        itemCount: defaultQuestions.length,
         itemBuilder: (context, i) {
-          final page = profileQuestions[i];
+          final page = defaultQuestions[i];
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
