@@ -32,6 +32,17 @@ service firebase.storage {
                 && request.resource.contentType.matches('video/.*')));
     }
 
+    // Option images for picture-answer questions; uploaded in the admin panel.
+    match /amore_question_media/{questionId}/{fileName} {
+      allow read: if request.auth != null;
+      allow delete: if request.auth != null
+        && request.auth.token.get('amoreAdmin', false) == true;
+      allow create, update: if request.auth != null
+        && request.auth.token.get('amoreAdmin', false) == true
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
     match /users/{uid}/photos/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == uid

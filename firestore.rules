@@ -22,6 +22,19 @@ service cloud.firestore {
       return /databases/$(database)/documents/amore_blocks/$(a + '_' + b);
     }
     function notBlocked(a, b) { return !exists(blockPath(a, b)) && !exists(blockPath(b, a)); }
+    // Admins carry the custom claim `amoreAdmin` (functions/scripts/admin.js).
+    function isAdmin() { return signedIn() && request.auth.token.get('amoreAdmin', false) == true; }
+
+    // Onboarding questions, managed in the admin panel.
+    match /amore_questions/{qid} {
+      allow read: if signedIn();
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && qid.matches('^[A-Za-z][A-Za-z0-9]{0,29}$')
+        && request.resource.data.type in ['text', 'longText', 'date', 'height', 'scale', 'single', 'multi', 'photos', 'video']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0;
+    }
 
     // Document id is `{blocker}_{blocked}`. Both people can see a block (so
     // each side hides the other); only the blocker can remove it.

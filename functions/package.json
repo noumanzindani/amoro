@@ -11,6 +11,9 @@
   },
   "scripts": {
     "seed": "node scripts/seed.js",
-    "seed:clean": "node scripts/seed.js --clean"
+    "seed:clean": "node scripts/seed.js --clean",
+    "admin:add": "node scripts/admin.js add",
+    "admin:remove": "node scripts/admin.js remove",
+    "admin:list": "node scripts/admin.js list"
   }
 }
