@@ -40,6 +40,21 @@ List<ProfileQuestion> profileSections(List<ProfileQuestion> questions) => [
       q,
 ];
 
+/// A section's answer in a displayable shape (text, or photo URLs), or
+/// null when it is missing or of the wrong type.
+Object? _sectionAnswer(ProfileQuestion q, Object? raw) {
+  if (q.type == QuestionType.longText &&
+      raw is String &&
+      raw.trim().isNotEmpty) {
+    return raw;
+  }
+  if (q.type == QuestionType.photos && raw is List) {
+    final urls = raw.whereType<String>().toList();
+    return urls.isEmpty ? null : urls;
+  }
+  return null;
+}
+
 /// Answer chips for a profile, e.g. "💍 Long-term relationship".
 List<String> profileChips(AppUser user, List<ProfileQuestion> questions) => [
   for (final q in questions)
@@ -264,8 +279,7 @@ class ProfileDetails extends StatelessWidget {
           ),
         ],
         for (final q in profileSections(questions))
-          if (user[q.id] case final answer?
-              when answer is! List || answer.isNotEmpty) ...[
+          if (_sectionAnswer(q, user[q.id]) case final answer?) ...[
             const SizedBox(height: 20),
             Text(
               q.title,
@@ -274,21 +288,21 @@ class ProfileDetails extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            if (q.type == QuestionType.longText)
-              Text('$answer', style: theme.textTheme.bodyLarge)
-            else
+            if (answer is String)
+              Text(answer, style: theme.textTheme.bodyLarge)
+            else if (answer is List<String>)
               SizedBox(
                 height: 200,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: (answer as List).length,
+                  itemCount: answer.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (_, i) => ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: AspectRatio(
                       aspectRatio: 3 / 4,
                       child: CachedNetworkImage(
-                        imageUrl: answer[i] as String,
+                        imageUrl: answer[i],
                         fit: BoxFit.cover,
                       ),
                     ),

@@ -60,7 +60,6 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
   QuestionType get _type =>
       QuestionType.values.firstWhere((t) => t.name == _draft['type']);
 
-
   @override
   void dispose() {
     _id.dispose();
@@ -130,6 +129,7 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
       id: id,
       isNew: _isNew,
       existingIds: _ids,
+      others: widget.all,
     );
     setState(() => _errors = errors);
     if (errors.isNotEmpty) return;

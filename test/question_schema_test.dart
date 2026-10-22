@@ -131,13 +131,22 @@ void main() {
   });
 
   test('every built-in question passes admin validation', () {
-    for (final q in defaultQuestions) {
+    // As imported: order = index * 10.
+    final imported = [
+      for (var i = 0; i < defaultQuestions.length; i++)
+        ProfileQuestion.fromMap(defaultQuestions[i].id, {
+          ...defaultQuestions[i].toMap(),
+          'order': i * 10,
+        })!,
+    ];
+    for (final q in imported) {
       expect(
         validateQuestionDefinition(
           q.toMap(),
           id: q.id,
           isNew: false,
           existingIds: const {},
+          others: imported,
         ),
         isEmpty,
         reason: q.id,
@@ -191,6 +200,137 @@ void main() {
         q('privatePhotos'),
       ];
       expect(profileSections(qs).map((q) => q.id), ['story', 'pics']);
+    });
+  });
+
+  group('review fixes', () {
+    test('fromMap tolerates wrongly typed fields instead of throwing', () {
+      final q = ProfileQuestion.fromMap('x', {
+        'type': 'single',
+        'group': 'about',
+        'title': 'T',
+        'order': '5',
+        'options': {'a': 1},
+        'subtitle': 3,
+      });
+      expect(q, isNotNull);
+      expect(q!.order, 0);
+      expect(q.options, isEmpty);
+      final o = ProfileQuestion.fromMap('y', {
+        'type': 'single',
+        'group': 'about',
+        'title': 'T',
+        'options': [
+          {'value': 'a', 'label': 'A', 'emoji': 7, 'imageUrl': false},
+        ],
+      })!;
+      expect(o.options.single.emoji, isNull);
+      expect(o.options.single.imageUrl, isNull);
+    });
+
+    test('reserved field names cannot be question ids', () {
+      for (final id in [
+        'fcmTokens',
+        'onboardingAt',
+        'onboardingComplete',
+        'onboardingStep',
+        'createdAt',
+        'updatedAt',
+        'seed',
+      ]) {
+        expect(
+          validateQuestionDefinition(
+            {'type': 'text', 'group': 'about', 'title': 'T'},
+            id: id,
+            isNew: true,
+            existingIds: const {},
+          ),
+          isNotEmpty,
+          reason: id,
+        );
+      }
+    });
+
+    test('format returns null for answers of the wrong type', () {
+      expect(q('smoking').format(5), isNull);
+      expect(q('bio').format(['x']), isNull);
+      expect(q('interests').format('travel'), isNull);
+      expect(q('heightCm').format('tall'), isNull);
+      expect(q('attractionMen').format('x'), isNull);
+      expect(q('birthDate').format('yesterday'), isNull);
+    });
+
+    test('show-only-if needs values and an earlier, shown source', () {
+      final source = ProfileQuestion.fromMap('pets', {
+        'type': 'single',
+        'group': 'about',
+        'title': 'Pets?',
+        'order': 10,
+        'options': [
+          {'value': 'yes', 'label': 'Yes'},
+        ],
+      })!;
+      List<String> v(
+        Map<String, dynamic> showIf, {
+        double order = 20,
+        List<ProfileQuestion>? others,
+      }) => validateQuestionDefinition(
+        {
+          'type': 'text',
+          'group': 'about',
+          'title': 'T',
+          'order': order,
+          'showIf': showIf,
+        },
+        id: 'dogName',
+        isNew: true,
+        existingIds: const {},
+        others: others ?? [source],
+      );
+      expect(v({'questionId': 'pets', 'values': []}), isNotEmpty);
+      expect(
+        v({
+          'questionId': 'pets',
+          'values': ['yes'],
+        }),
+        isEmpty,
+      );
+      expect(
+        v({
+          'questionId': 'pets',
+          'values': ['yes'],
+        }, order: 5),
+        isNotEmpty,
+      );
+      expect(
+        v({
+          'questionId': 'gone',
+          'values': ['yes'],
+        }),
+        isNotEmpty,
+      );
+      final hidden = ProfileQuestion.fromMap('pets', {
+        ...source.toMap(),
+        'active': false,
+      })!;
+      expect(
+        v(
+          {
+            'questionId': 'pets',
+            'values': ['yes'],
+          },
+          others: [hidden],
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('answers count only options that still exist', () {
+      expect(
+        validateAnswer(q('interests'), ['travel', 'music', 'gone']),
+        isNotNull,
+      );
+      expect(knownValues(q('interests'), ['travel', 'gone']), ['travel']);
     });
   });
 }

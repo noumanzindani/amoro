@@ -131,12 +131,35 @@ class _OnboardingFlowState extends State<_OnboardingFlow> {
     );
   }
 
+  /// No question applies to this person (e.g. the admin made every
+  /// remaining one conditional): nothing to ask, so let them finish.
+  Widget _nothingToAsk() => Scaffold(
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: AppButton(
+          text: 'Finish',
+          loading: _saving,
+          onPressed: () async {
+            setState(() => _saving = true);
+            try {
+              await _session.updateProfile({'onboardingComplete': true});
+            } finally {
+              if (mounted) setState(() => _saving = false);
+            }
+          },
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    final flow = _flow;
+    if (flow.isEmpty) return _nothingToAsk();
     final theme = Theme.of(context);
     final q = _question;
     final prev = _prevFrom(_step);
-    final flow = _flow;
     return Scaffold(
       appBar: AppBar(
         leading: prev != null

@@ -20,6 +20,16 @@ void main() {
     expect(effectiveQuestions([a, b]).map((q) => q.id), ['a']);
   });
 
+  test('every question hidden → built-in questions, never an empty flow', () {
+    final b = ProfileQuestion.fromMap('b', {
+      'type': 'text',
+      'group': 'about',
+      'title': 'B',
+      'active': false,
+    })!;
+    expect(effectiveQuestions([b]), defaultQuestions);
+  });
+
   group('resumeQuestionId', () {
     const qs = defaultQuestions;
 

@@ -14,11 +14,20 @@ class QuestionRepository {
       .orderBy('order')
       .snapshots()
       .map(
-        (snap) => snap.docs
-            .map((d) => ProfileQuestion.fromMap(d.id, d.data()))
-            .whereType<ProfileQuestion>()
-            .toList(),
+        (snap) => snap.docs.map(_parse).whereType<ProfileQuestion>().toList(),
       );
+
+  /// One bad document (e.g. hand-edited in the console) is skipped rather
+  /// than failing the whole list.
+  static ProfileQuestion? _parse(
+    QueryDocumentSnapshot<Map<String, dynamic>> d,
+  ) {
+    try {
+      return ProfileQuestion.fromMap(d.id, d.data());
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> upsert(String id, Map<String, dynamic> data) =>
       _col.doc(id).set({...data, 'updatedAt': FieldValue.serverTimestamp()});

@@ -48,11 +48,12 @@ class QuestionOption {
     if (m is! Map) return null;
     final value = m['value'], label = m['label'];
     if (value is! String || label is! String) return null;
+    final emoji = m['emoji'], imageUrl = m['imageUrl'];
     return QuestionOption(
       value,
       label,
-      m['emoji'] as String?,
-      m['imageUrl'] as String?,
+      emoji is String ? emoji : null,
+      imageUrl is String ? imageUrl : null,
     );
   }
 }
@@ -90,6 +91,24 @@ const systemQuestionIds = {
   'interestedIn',
   'photoUrls',
 };
+
+/// Fields the app itself keeps on a profile; a question can't use them.
+const reservedAnswerIds = {
+  'fcmTokens',
+  'onboardingAt',
+  'onboardingComplete',
+  'onboardingStep',
+  'createdAt',
+  'updatedAt',
+  'seed',
+};
+
+/// The answer values that are still options of [q] (an admin may have
+/// removed some since the person answered).
+List<String> knownValues(ProfileQuestion q, Iterable<Object?> values) => [
+  for (final v in values)
+    if (v is String && q.options.any((o) => o.value == v)) v,
+];
 
 final _questionId = RegExp(r'^[A-Za-z][A-Za-z0-9]{0,29}$');
 final _optionValue = RegExp(r'^[A-Za-z0-9][A-Za-z0-9_]*$');
@@ -217,13 +236,13 @@ class ProfileQuestion {
       title: title,
       subtitle: asString(m['subtitle']),
       options: [
-        for (final o in (m['options'] as List? ?? const []))
-          ?QuestionOption.fromMap(o),
+        if (m['options'] case final List options)
+          for (final o in options) ?QuestionOption.fromMap(o),
       ],
       required: m['required'] == true,
       private: m['private'] == true,
       active: m['active'] != false,
-      order: (m['order'] as num?)?.toDouble() ?? 0,
+      order: m['order'] is num ? (m['order'] as num).toDouble() : 0,
       minSelect: asInt(m['minSelect']),
       maxSelect: asInt(m['maxSelect']),
       maxLength: asInt(m['maxLength']),
@@ -239,33 +258,38 @@ class ProfileQuestion {
   }
 
   /// Human-readable answer for profile views and cards; null if unanswered.
+  /// Answers are user-written data, so a value of the wrong type (another
+  /// user's bad write, or a question whose type changed) reads as null.
   String? format(dynamic value) {
-    if (value == null) return null;
     switch (type) {
       case QuestionType.text:
       case QuestionType.longText:
-        final s = (value as String).trim();
+        if (value is! String) return null;
+        final s = value.trim();
         return s.isEmpty ? null : s;
       case QuestionType.date:
-        final d = (value as Timestamp).toDate();
+        if (value is! Timestamp) return null;
+        final d = value.toDate();
         return '${d.day}/${d.month}/${d.year}';
       case QuestionType.height:
-        return formatHeight(value as int);
+        return value is int ? formatHeight(value) : null;
       case QuestionType.scale:
-        final v = value as int;
-        return scaleFormat?.replaceAll('{v}', '$v') ?? '$v';
+        if (value is! int) return null;
+        return scaleFormat?.replaceAll('{v}', '$value') ?? '$value';
       case QuestionType.single:
-        return _option(value as String)?.display;
+        return value is String ? _option(value)?.display : null;
       case QuestionType.multi:
-        final labels = (value as List)
-            .map((v) => _option(v as String)?.display)
+        if (value is! List) return null;
+        final labels = value
+            .whereType<String>()
+            .map((v) => _option(v)?.display)
             .whereType<String>();
         return labels.isEmpty ? null : labels.join(', ');
       case QuestionType.photos:
-        final n = (value as List).length;
-        return n == 0 ? null : '$n photo${n == 1 ? '' : 's'}';
+        if (value is! List || value.isEmpty) return null;
+        return '${value.length} photo${value.length == 1 ? '' : 's'}';
       case QuestionType.video:
-        return 'Video recorded';
+        return value is String ? 'Video recorded' : null;
     }
   }
 
@@ -314,8 +338,12 @@ List<String> validateQuestionDefinition(
   required String id,
   required bool isNew,
   required Set<String> existingIds,
+  List<ProfileQuestion> others = const [],
 }) {
   final errors = <String>[];
+  if (reservedAnswerIds.contains(id)) {
+    errors.add('"$id" is used by the app itself; choose another ID.');
+  }
   if (!_questionId.hasMatch(id)) {
     errors.add(
       'ID must start with a letter and use only letters and numbers '
@@ -370,8 +398,27 @@ List<String> validateQuestionDefinition(
     if (draft['private'] != true) errors.add('Videos are always private.');
   }
   final showIf = ShowIf.fromMap(draft['showIf']);
-  if (showIf != null && showIf.questionId == id) {
-    errors.add('A question can\'t depend on itself.');
+  if (showIf != null) {
+    final source = others
+        .where((q) => q.id == showIf.questionId && q.id != id)
+        .firstOrNull;
+    final order = draft['order'] is num ? (draft['order'] as num) : 0;
+    if (showIf.questionId == id) {
+      errors.add('A question can\'t depend on itself.');
+    } else if (source == null) {
+      errors.add('The "show only if" question no longer exists.');
+    } else if (!source.active) {
+      errors.add(
+        'The "show only if" question is hidden, so this would never show.',
+      );
+    } else if (source.order >= order) {
+      errors.add(
+        'Move this question below "${source.title}", which it depends on.',
+      );
+    }
+    if (showIf.values.isEmpty) {
+      errors.add('Pick at least one answer for "show only if".');
+    }
   }
   return errors;
 }
@@ -430,6 +477,11 @@ dynamic normalizeAnswer(dynamic value) {
 }
 
 String? validateAnswer(ProfileQuestion question, dynamic value) {
+  if (question.type == QuestionType.multi && value is List) {
+    value = knownValues(question, value);
+  } else if (question.type == QuestionType.single && value is String) {
+    value = knownValues(question, [value]).firstOrNull;
+  }
   final empty =
       value == null ||
       (value is String && value.trim().isEmpty) ||

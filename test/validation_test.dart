@@ -32,12 +32,10 @@ void main() {
   });
 
   test('interests need 3 to 10', () {
-    expect(validateAnswer(q('interests'), ['a', 'b']), isNotNull);
-    expect(validateAnswer(q('interests'), ['a', 'b', 'c']), isNull);
-    expect(
-      validateAnswer(q('interests'), List.generate(11, (i) => '$i')),
-      isNotNull,
-    );
+    final values = q('interests').options.map((o) => o.value).toList();
+    expect(validateAnswer(q('interests'), values.take(2).toList()), isNotNull);
+    expect(validateAnswer(q('interests'), values.take(3).toList()), isNull);
+    expect(validateAnswer(q('interests'), values.take(11).toList()), isNotNull);
   });
 
   test('exactly one public profile photo', () {

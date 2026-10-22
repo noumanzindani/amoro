@@ -54,14 +54,14 @@ class QuestionInput extends StatelessWidget {
       case QuestionType.single:
         return _ChoiceAnswer(
           question: question,
-          selected: value == null ? const [] : [value as String],
+          selected: knownValues(question, [value]),
           onChanged: (list) => onChanged(list.isEmpty ? null : list.first),
           multi: false,
         );
       case QuestionType.multi:
         return _ChoiceAnswer(
           question: question,
-          selected: List<String>.from(value ?? const []),
+          selected: knownValues(question, value is List ? value : const []),
           onChanged: onChanged,
           multi: true,
         );

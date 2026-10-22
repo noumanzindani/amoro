@@ -9,8 +9,9 @@ import 'session_provider.dart';
 /// The questions to ask: the admin-managed ones when there are any,
 /// otherwise the built-in [defaultQuestions]. Inactive ones are left out.
 List<ProfileQuestion> effectiveQuestions(List<ProfileQuestion>? remote) {
-  if (remote == null || remote.isEmpty) return defaultQuestions;
-  return remote.where((q) => q.active).toList();
+  final active = remote?.where((q) => q.active).toList() ?? const [];
+  // Never an empty flow: hiding everything means "use the built-in set".
+  return active.isEmpty ? defaultQuestions : active;
 }
 
 bool _answered(Object? v) =>
