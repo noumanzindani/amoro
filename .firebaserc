@@ -1,1 +1,15 @@
-{"projects":{"default":"hbgapp-c3c88"}}
+{
+  "projects": {
+    "default": "hbgapp-c3c88"
+  },
+  "targets": {
+    "hbgapp-c3c88": {
+      "hosting": {
+        "admin": [
+          "amore-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

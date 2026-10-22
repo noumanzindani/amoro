@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -48,6 +45,17 @@ class DefaultFirebaseOptions {
         );
     }
   }
+
+  // "Amore Admin" web app (the admin panel, lib/admin/main.dart).
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyBJE_Z5IOZngBwxTanyKmRcRXKG7b6PTuM',
+    appId: '1:653683288960:web:84e9ff53fc293871642f65',
+    messagingSenderId: '653683288960',
+    projectId: 'hbgapp-c3c88',
+    authDomain: 'hbgapp-c3c88.firebaseapp.com',
+    storageBucket: 'hbgapp-c3c88.firebasestorage.app',
+    measurementId: 'G-V2LH6ZT7BK',
+  );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDfw_DT5q4wFGMa6MxL3YkyLQ3WxIB5byo',

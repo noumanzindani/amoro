@@ -21,7 +21,8 @@
           "projectId": "hbgapp-c3c88",
           "configurations": {
             "android": "1:653683288960:android:75d8d89f406fc45d642f65",
-            "ios": "1:653683288960:ios:461a9c531fbdb471642f65"
+            "ios": "1:653683288960:ios:461a9c531fbdb471642f65",
+            "web": "1:653683288960:web:84e9ff53fc293871642f65"
           }
         }
       }
@@ -47,6 +48,23 @@
         ".git",
         "*.local",
         "scripts"
+      ]
+    }
+  ],
+  "hosting": [
+    {
+      "target": "admin",
+      "public": "build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     }
   ]
