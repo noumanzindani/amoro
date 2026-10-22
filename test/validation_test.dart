@@ -40,13 +40,78 @@ void main() {
     );
   });
 
-  test('photos need at least one, at most six', () {
+  test('exactly one public profile photo', () {
     expect(validateAnswer(q('photoUrls'), <String>[]), isNotNull);
     expect(validateAnswer(q('photoUrls'), ['u']), isNull);
     expect(
-      validateAnswer(q('photoUrls'), List.generate(7, (i) => 'u$i')),
-      isNotNull,
+      validateAnswer(q('photoUrls'), ['a', 'b']),
+      'You can choose up to 1 photo.',
     );
+  });
+
+  test('private photos and video are asked of women only', () {
+    for (final id in ['privatePhotos', 'privateVideo']) {
+      expect(q(id).appliesTo({'gender': 'woman'}), isTrue);
+      expect(q(id).appliesTo({'gender': 'man'}), isFalse);
+      expect(q(id).appliesTo({'gender': 'nonbinary'}), isFalse);
+      expect(q(id).appliesTo({}), isFalse);
+    }
+    expect(q('photoUrls').appliesTo({'gender': 'man'}), isTrue);
+  });
+
+  test('attraction and first-discovery questions are private sliders', () {
+    for (final id in [
+      'attractionWomen',
+      'attractionMen',
+      'firstSexualAwarenessAge',
+    ]) {
+      expect(q(id).private, isTrue, reason: id);
+      expect(q(id).required, isFalse, reason: id);
+      expect(q(id).type, QuestionType.scale, reason: id);
+      for (final g in ['woman', 'man', 'nonbinary']) {
+        expect(q(id).appliesTo({'gender': g}), isTrue);
+      }
+    }
+    expect(q('attractionMen').format(7), '7 / 10');
+    expect(q('attractionWomen').scaleMax, 10);
+    expect(q('firstSexualAwarenessAge').format(12), 'Age 12');
+    expect(q('firstSexualAwarenessAge').scaleMin, 5);
+    expect(validateAnswer(q('attractionMen'), null), isNull); // skippable
+  });
+
+  test('everyone records the private 2-minute video', () {
+    final long = q('privateVideoLong');
+    expect(long.private, isTrue);
+    expect(long.required, isTrue);
+    expect(long.videoLength, const Duration(seconds: 120));
+    for (final g in ['woman', 'man', 'nonbinary']) {
+      expect(long.appliesTo({'gender': g}), isTrue);
+    }
+    expect(q('privateVideo').videoLength, const Duration(seconds: 30));
+  });
+
+  test('video lengths read naturally', () {
+    expect(formatVideoLength(const Duration(seconds: 30)), '30 seconds');
+    expect(formatVideoLength(const Duration(seconds: 120)), '2 minutes');
+    expect(formatVideoLength(const Duration(seconds: 60)), '1 minute');
+    expect(formatVideoLength(const Duration(seconds: 90)), '1 min 30 s');
+  });
+
+  test('the 30-second video is required and private', () {
+    expect(q('privateVideo').private, isTrue);
+    expect(validateAnswer(q('privateVideo'), null), isNotNull);
+    expect(validateAnswer(q('privateVideo'), 'users/u/private/1.mp4'), isNull);
+    expect(q('privateVideo').format('users/u/private/1.mp4'), 'Video recorded');
+  });
+
+  test('exactly three private photos', () {
+    expect(q('privatePhotos').private, isTrue);
+    expect(q('photoUrls').private, isFalse);
+    expect(validateAnswer(q('privatePhotos'), <String>[]), isNotNull);
+    expect(validateAnswer(q('privatePhotos'), ['a']), 'Add 2 more photos.');
+    expect(validateAnswer(q('privatePhotos'), ['a', 'b']), 'Add 1 more photo.');
+    expect(validateAnswer(q('privatePhotos'), ['a', 'b', 'c']), isNull);
+    expect(validateAnswer(q('privatePhotos'), ['a', 'b', 'c', 'd']), isNotNull);
   });
 
   test('normalizeAnswer trims text and empties become null', () {

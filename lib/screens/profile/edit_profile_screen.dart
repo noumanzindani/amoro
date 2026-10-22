@@ -13,7 +13,8 @@ class EditProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final me = context.watch<SessionProvider>().profile;
+    final session = context.watch<SessionProvider>();
+    final me = session.profile;
     if (me == null) return const Scaffold(body: Center(child: AppLoader()));
     final theme = Theme.of(context);
     return Scaffold(
@@ -30,16 +31,19 @@ class EditProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
-            for (final q in profileQuestions.where((q) => q.group == group))
+            for (final q in profileQuestions.where(
+              (q) => q.group == group && q.appliesTo(session.allAnswers),
+            ))
               ListTile(
                 title: Text(q.title),
                 subtitle: Text(
-                  q.format(me[q.id]) ?? (q.required ? 'Required' : 'Add'),
+                  q.format(session.answerOf(q)) ??
+                      (q.required ? 'Required' : 'Add'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _edit(context, q, me[q.id]),
+                onTap: () => _edit(context, q, session.answerOf(q)),
               ),
           ],
           const SizedBox(height: 24),
@@ -85,7 +89,7 @@ class _EditSheetState extends State<_EditSheet> {
     }
     setState(() => _saving = true);
     try {
-      await context.read<SessionProvider>().updateProfile({q.id: value});
+      await context.read<SessionProvider>().saveAnswer(q, value);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

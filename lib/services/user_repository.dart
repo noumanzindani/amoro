@@ -32,6 +32,16 @@ class UserRepository {
       .doc(uid)
       .update({...fields, 'updatedAt': FieldValue.serverTimestamp()});
 
+  /// Answers to private questions; readable only by the owner (rules).
+  DocumentReference<Map<String, dynamic>> _private(String uid) =>
+      _users.doc(uid).collection('private').doc('profile');
+
+  Stream<Map<String, dynamic>> watchPrivate(String uid) =>
+      _private(uid).snapshots().map((d) => d.data() ?? const {});
+
+  Future<void> updatePrivate(String uid, Map<String, dynamic> fields) =>
+      _private(uid).set(fields, SetOptions(merge: true));
+
   /// Profiles whose gender is one I'm interested in. Further filtering
   /// happens client-side in DeckProvider.
   /// Everyone who finished onboarding, newest first (Community tab).

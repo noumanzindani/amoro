@@ -37,6 +37,10 @@
 	<string>653683288960-nlf6r56dkrsnhs6ogo37l30en5eeo0rs.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Amore uses the camera so you can record your profile video.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Amore records sound with your profile video.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Amore needs access to your photos so you can add them to your profile.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -107,7 +107,7 @@ function profile(i) {
     kidsWant: maybe(0.7, pick(KIDS_WANT)),
     bio: maybe(0.85, pick(BIOS)),
     photoUrls: [], // filled by uploadPhoto()
-    onboardingStep: 17,
+    onboardingStep: 23,
     onboardingComplete: true,
     createdAt,
     updatedAt: createdAt,

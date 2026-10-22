@@ -17,16 +17,46 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   late final SessionProvider _session = context.read<SessionProvider>();
-  late final Map<String, dynamic> _answers = {..._session.profile!.data};
-  late int _step = _session.profile!.onboardingStep.clamp(
-    0,
-    profileQuestions.length - 1,
-  );
+  late final Map<String, dynamic> _answers = _session.allAnswers;
+  late int _step = _resumeStep();
   late final PageController _pages = PageController(initialPage: _step);
   bool _saving = false;
 
   ProfileQuestion get _question => profileQuestions[_step];
-  bool get _isLast => _step == profileQuestions.length - 1;
+  bool get _isLast => _nextFrom(_step) == null;
+
+  bool _applies(int i) => profileQuestions[i].appliesTo(_answers);
+
+  /// Indices of the questions this user is asked (e.g. women-only steps
+  /// drop out for everyone else).
+  List<int> get _flow => [
+    for (var i = 0; i < profileQuestions.length; i++)
+      if (_applies(i)) i,
+  ];
+
+  int? _nextFrom(int i) {
+    for (var j = i + 1; j < profileQuestions.length; j++) {
+      if (_applies(j)) return j;
+    }
+    return null;
+  }
+
+  int? _prevFrom(int i) {
+    for (var j = i - 1; j >= 0; j--) {
+      if (_applies(j)) return j;
+    }
+    return null;
+  }
+
+  /// The saved step, moved onto a question this user is actually asked.
+  int _resumeStep() {
+    final saved = _session.profile!.onboardingStep.clamp(
+      0,
+      profileQuestions.length - 1,
+    );
+    if (_applies(saved)) return saved;
+    return _nextFrom(saved) ?? _prevFrom(saved) ?? 0;
+  }
 
   @override
   void dispose() {
@@ -48,13 +78,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
     setState(() => _saving = true);
     try {
-      await _session.updateProfile({
-        q.id: value,
-        'onboardingStep': _step + 1,
-        if (_isLast) 'onboardingComplete': true,
-      });
+      await _session.saveAnswer(
+        q,
+        value,
+        extra: {
+          'onboardingStep': _nextFrom(_step) ?? _step + 1,
+          if (_isLast) 'onboardingComplete': true,
+        },
+      );
       // On the last step the router takes over and leaves this screen.
-      if (!_isLast && mounted) _goTo(_step + 1);
+      final next = _nextFrom(_step);
+      if (next != null && mounted) _goTo(next);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -81,12 +115,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final q = _question;
+    final prev = _prevFrom(_step);
+    final flow = _flow;
     return Scaffold(
       appBar: AppBar(
-        leading: _step > 0
-            ? CircleBackButton(
-                onPressed: _saving ? null : () => _goTo(_step - 1),
-              )
+        leading: prev != null
+            ? CircleBackButton(onPressed: _saving ? null : () => _goTo(prev))
             : null,
         title: Text(q.group.label),
         actions: [
@@ -99,7 +133,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
-            value: (_step + 1) / profileQuestions.length,
+            value: (flow.indexOf(_step) + 1) / flow.length,
           ),
         ),
       ),

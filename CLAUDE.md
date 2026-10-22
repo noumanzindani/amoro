@@ -67,6 +67,8 @@ widgets/              ui.dart (AppButton, AppLoader, FloatingNavBar…), profile
 - **Questions:** each `ProfileQuestion` in `profileQuestions` drives both onboarding
   and Edit Profile; its answer is stored on `amore_users/{uid}` under its `id`.
   To add a question, add one entry (and option values) — no model changes.
+  `showIf` makes a question conditional (e.g. `isWoman` gates `privatePhotos`/`privateVideo`);
+  onboarding skips it and Edit Profile hides it when it doesn't apply.
   `validateAnswer` / `normalizeAnswer` are shared by both flows.
 - **Chats:** `amore_matches/{uidA}_{uidB}` (sorted ids) for both swipe matches and
   Community chats (`source: 'community'`), with `messages` subcollection.
@@ -75,6 +77,10 @@ widgets/              ui.dart (AppButton, AppLoader, FloatingNavBar…), profile
 - **Media:** chat media is referenced by Storage *path* and downloaded via the
   SDK — never store download URLs for chat media (they bypass rules).
   View-once files are deleted by the receiver after viewing.
+- **Private answers:** questions with `private: true` (`privatePhotos`, `privateVideo`, `privateVideoLong`, and the `personal` group: `attractionWomen`, `attractionMen`, `firstSexualAwarenessAge` — kept for future AI matching, never displayed) are
+  saved to owner-only `amore_users/{uid}/private/profile` via
+  `SessionProvider.saveAnswer`; private photos and videos live at `users/{uid}/private/`
+  (owner-only Storage rule) and are stored as paths, never download URLs.
 - **Push tokens:** stored in owner-only `amore_users/{uid}/private/devices`,
   never on the public profile (rules reject `fcmTokens` there).
 - **Blocks:** `amore_blocks/{blocker}_{blocked}`; `BlockProvider.isHidden` filters
