@@ -23,4 +23,6 @@ class Backend {
       db.collection('amore_reports');
   static CollectionReference<Map<String, dynamic>> get matches =>
       db.collection('amore_matches');
+  static CollectionReference<Map<String, dynamic>> get questions =>
+      db.collection('amore_questions');
 }

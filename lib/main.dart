@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/block_provider.dart';
 import 'providers/deck_provider.dart';
+import 'providers/questions_provider.dart';
 import 'providers/session_provider.dart';
 import 'router.dart';
 import 'services/auth_service.dart';
 import 'services/block_repository.dart';
 import 'services/chat_repository.dart';
 import 'services/push_service.dart';
+import 'services/question_repository.dart';
 import 'services/storage_service.dart';
 import 'services/swipe_repository.dart';
 import 'services/user_repository.dart';
@@ -69,6 +71,9 @@ class _AmoreAppState extends State<AmoreApp> {
         Provider(create: (_) => ChatRepository()),
         Provider(create: (_) => StorageService()),
         ChangeNotifierProvider.value(value: _session),
+        ChangeNotifierProvider(
+          create: (_) => QuestionsProvider(QuestionRepository(), _session),
+        ),
         Provider.value(value: _blocks),
         ChangeNotifierProvider(create: (_) => BlockProvider(_blocks, _session)),
         ChangeNotifierProvider(create: (_) => DeckProvider(_users, _swipes)),

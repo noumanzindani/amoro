@@ -3,39 +3,57 @@ import 'package:provider/provider.dart';
 
 import '../../onboarding/question_input.dart';
 import '../../onboarding/questions.dart';
+import '../../providers/questions_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/ui.dart';
 
 /// One question per page. Each answer is saved as the user moves on, along
-/// with `onboardingStep`, so quitting midway resumes at the same question.
-class OnboardingScreen extends StatefulWidget {
+/// with `onboardingAt` (the next question's id), so quitting midway resumes
+/// at the same question even if the admin reorders questions meanwhile.
+class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  Widget build(BuildContext context) {
+    final questions = context.watch<QuestionsProvider>();
+    if (!questions.loaded) {
+      return const Scaffold(body: Center(child: AppLoader()));
+    }
+    return _OnboardingFlow(questions: questions.questions);
+  }
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingFlow extends StatefulWidget {
+  final List<ProfileQuestion> questions;
+  const _OnboardingFlow({required this.questions});
+
+  @override
+  State<_OnboardingFlow> createState() => _OnboardingFlowState();
+}
+
+class _OnboardingFlowState extends State<_OnboardingFlow> {
   late final SessionProvider _session = context.read<SessionProvider>();
   late final Map<String, dynamic> _answers = _session.allAnswers;
+  // A snapshot: admin edits made while someone is mid-flow apply next time.
+  late final List<ProfileQuestion> _qs = List.of(widget.questions);
   late int _step = _resumeStep();
   late final PageController _pages = PageController(initialPage: _step);
   bool _saving = false;
 
-  ProfileQuestion get _question => defaultQuestions[_step];
+  ProfileQuestion get _question => _qs[_step];
   bool get _isLast => _nextFrom(_step) == null;
 
-  bool _applies(int i) => defaultQuestions[i].appliesTo(_answers);
+  bool _applies(int i) => _qs[i].appliesTo(_answers);
 
   /// Indices of the questions this user is asked (e.g. women-only steps
   /// drop out for everyone else).
   List<int> get _flow => [
-    for (var i = 0; i < defaultQuestions.length; i++)
+    for (var i = 0; i < _qs.length; i++)
       if (_applies(i)) i,
   ];
 
   int? _nextFrom(int i) {
-    for (var j = i + 1; j < defaultQuestions.length; j++) {
+    for (var j = i + 1; j < _qs.length; j++) {
       if (_applies(j)) return j;
     }
     return null;
@@ -48,14 +66,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return null;
   }
 
-  /// The saved step, moved onto a question this user is actually asked.
   int _resumeStep() {
-    final saved = _session.profile!.onboardingStep.clamp(
-      0,
-      defaultQuestions.length - 1,
+    final id = resumeQuestionId(
+      questions: _qs,
+      answers: _answers,
+      onboardingAt: _session.profile!.onboardingAt,
     );
-    if (_applies(saved)) return saved;
-    return _nextFrom(saved) ?? _prevFrom(saved) ?? 0;
+    return id == null ? 0 : _qs.indexWhere((q) => q.id == id);
   }
 
   @override
@@ -76,18 +93,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return;
       }
     }
+    // Computed before saving: this answer can change which questions apply.
+    _answers[q.id] = value;
+    final next = _nextFrom(_step);
     setState(() => _saving = true);
     try {
       await _session.saveAnswer(
         q,
         value,
         extra: {
-          'onboardingStep': _nextFrom(_step) ?? _step + 1,
-          if (_isLast) 'onboardingComplete': true,
+          'onboardingAt': next == null ? null : _qs[next].id,
+          'onboardingStep': next ?? _step + 1, // read by older app builds
+          if (next == null) 'onboardingComplete': true,
         },
       );
       // On the last step the router takes over and leaves this screen.
-      final next = _nextFrom(_step);
       if (next != null && mounted) _goTo(next);
     } catch (e) {
       if (mounted) {
@@ -140,9 +160,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: PageView.builder(
         controller: _pages,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: defaultQuestions.length,
+        itemCount: _qs.length,
         itemBuilder: (context, i) {
-          final page = defaultQuestions[i];
+          final page = _qs[i];
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(

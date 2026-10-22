@@ -19,7 +19,9 @@ class AppUser {
       List<String>.from(data['interestedIn'] ?? const []);
   List<String> get photoUrls =>
       List<String>.from(data['photoUrls'] ?? const []);
-  int get onboardingStep => data['onboardingStep'] as int? ?? 0;
+
+  /// Id of the onboarding question to resume at.
+  String? get onboardingAt => data['onboardingAt'] as String?;
   bool get onboardingComplete => data['onboardingComplete'] == true;
 
   DateTime? get birthDate => (data['birthDate'] as Timestamp?)?.toDate();

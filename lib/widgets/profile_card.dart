@@ -1,8 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/app_user.dart';
 import '../onboarding/questions.dart';
+import '../providers/questions_provider.dart';
 
 /// Question ids shown elsewhere on the card rather than as chips.
 const _notChips = {
@@ -16,15 +18,16 @@ const _notChips = {
 };
 
 /// Answer chips for a profile, e.g. "💍 Long-term relationship".
-List<String> profileChips(AppUser user) => [
-  for (final q in defaultQuestions)
-    if (!_notChips.contains(q.id))
+List<String> profileChips(AppUser user, List<ProfileQuestion> questions) => [
+  for (final q in questions)
+    if (!q.private && !_notChips.contains(q.id))
       if (q.format(user[q.id]) case final text?)
         q.chipIcon == null ? text : '${q.chipIcon} $text',
 ];
 
-List<String> interestChips(AppUser user) {
-  final q = defaultQuestions.firstWhere((q) => q.id == 'interests');
+List<String> interestChips(AppUser user, List<ProfileQuestion> questions) {
+  final q = questions.where((q) => q.id == 'interests').firstOrNull;
+  if (q == null) return const [];
   final values = List<String>.from(user['interests'] ?? const []);
   return [
     for (final o in q.options)
@@ -138,7 +141,10 @@ class _ProfileCardState extends State<ProfileCard> {
                             spacing: 6,
                             runSpacing: 6,
                             children: [
-                              for (final c in profileChips(u).take(4))
+                              for (final c in profileChips(
+                                u,
+                                context.watch<QuestionsProvider>().questions,
+                              ).take(4))
                                 _DarkChip(c),
                             ],
                           ),
@@ -191,7 +197,8 @@ class ProfileDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bio = user['bio'] as String?;
-    final interests = interestChips(user);
+    final questions = context.watch<QuestionsProvider>().questions;
+    final interests = interestChips(user, questions);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
       children: [
@@ -214,7 +221,9 @@ class ProfileDetails extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: [for (final c in profileChips(user)) Chip(label: Text(c))],
+          children: [
+            for (final c in profileChips(user, questions)) Chip(label: Text(c)),
+          ],
         ),
         if (interests.isNotEmpty) ...[
           const SizedBox(height: 20),

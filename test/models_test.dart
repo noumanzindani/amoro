@@ -69,6 +69,6 @@ void main() {
       'pets': ['dog'],
       'name': 'Sara',
     });
-    expect(profileChips(user), ['🍷 No', '🚬 No', '🐶 Dog']);
+    expect(profileChips(user, defaultQuestions), ['🍷 No', '🚬 No', '🐶 Dog']);
   });
 }

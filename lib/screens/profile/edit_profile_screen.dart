@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../onboarding/question_input.dart';
 import '../../onboarding/questions.dart';
+import '../../providers/questions_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/ui.dart';
 
@@ -14,6 +15,7 @@ class EditProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
+    final questions = context.watch<QuestionsProvider>().questions;
     final me = session.profile;
     if (me == null) return const Scaffold(body: Center(child: AppLoader()));
     final theme = Theme.of(context);
@@ -21,31 +23,34 @@ class EditProfileScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Edit profile')),
       body: ListView(
         children: [
-          for (final group in QuestionGroup.values) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-              child: Text(
-                group.label,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-            for (final q in defaultQuestions.where(
+          for (final group in QuestionGroup.values)
+            if (questions.any(
               (q) => q.group == group && q.appliesTo(session.allAnswers),
-            ))
-              ListTile(
-                title: Text(q.title),
-                subtitle: Text(
-                  q.format(session.answerOf(q)) ??
-                      (q.required ? 'Required' : 'Add'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+            )) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+                child: Text(
+                  group.label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _edit(context, q, session.answerOf(q)),
               ),
-          ],
+              for (final q in questions.where(
+                (q) => q.group == group && q.appliesTo(session.allAnswers),
+              ))
+                ListTile(
+                  title: Text(q.title),
+                  subtitle: Text(
+                    q.format(session.answerOf(q)) ??
+                        (q.required ? 'Required' : 'Add'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _edit(context, q, session.answerOf(q)),
+                ),
+            ],
           const SizedBox(height: 24),
         ],
       ),
