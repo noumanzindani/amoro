@@ -16,6 +16,18 @@ flutter run
 flutter test
 ```
 
+## Admin panel
+
+https://amore-admin.web.app — manage onboarding questions (options, pictures,
+required, public/private, upload questions, "show only if"). Sign in with an
+admin account; grant access with `cd functions && npm run admin:add -- <email>`.
+The first time, press **Import built-in questions**.
+
+```bash
+flutter build web -t lib/admin/main.dart --release
+firebase deploy --only hosting:admin
+```
+
 ## Firebase
 
 Uses the shared `hbgapp-c3c88` project. Amore's data lives only in `amore_*`
