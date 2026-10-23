@@ -123,15 +123,16 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (choice == null || !mounted || _match == null) return;
 
+    // Camera only, never the gallery: everything sent is taken live.
     final picker = ImagePicker();
     final XFile? picked = choice.type == MessageType.photo
         ? await picker.pickImage(
-            source: ImageSource.gallery,
+            source: ImageSource.camera,
             maxWidth: 1920,
             imageQuality: 85,
           )
         : await picker.pickVideo(
-            source: ImageSource.gallery,
+            source: ImageSource.camera,
             maxDuration: const Duration(seconds: 60),
           );
     if (picked == null || !mounted) return;
@@ -345,8 +346,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         IconButton(
-                          tooltip: 'Send photo or video',
-                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          tooltip: 'Take a photo or video',
+                          icon: const Icon(Icons.photo_camera_outlined),
                           onPressed: _sendingMedia || _match == null
                               ? null
                               : _pickMedia,
@@ -433,8 +434,8 @@ class _AttachSheetState extends State<_AttachSheet> {
           ),
           const SizedBox(height: 8),
           AppButton(
-            text: 'Photo',
-            icon: const Icon(Icons.photo_outlined, color: Colors.white),
+            text: 'Take photo',
+            icon: const Icon(Icons.photo_camera_outlined, color: Colors.white),
             onPressed: () => Navigator.pop(
               context,
               _MediaChoice(MessageType.photo, _viewOnce),
@@ -442,7 +443,7 @@ class _AttachSheetState extends State<_AttachSheet> {
           ),
           const SizedBox(height: 10),
           AppButton.light(
-            text: 'Video',
+            text: 'Record video',
             icon: const Icon(Icons.videocam_outlined, color: Colors.black),
             onPressed: () => Navigator.pop(
               context,

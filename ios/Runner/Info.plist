@@ -38,7 +38,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Amore uses the camera so you can record your profile video.</string>
+	<string>Amore uses the camera so you can take your profile photos and videos and send photos and videos in chat.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Amore records sound with your profile video.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

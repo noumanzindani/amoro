@@ -370,8 +370,10 @@ class _PhotosAnswerState extends State<_PhotosAnswer> {
   bool _uploading = false;
 
   Future<void> _add() async {
+    // Camera only, never the gallery, so profile photos are taken live.
     final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
+      source: ImageSource.camera,
+      preferredCameraDevice: CameraDevice.front,
       maxWidth: 1440,
       imageQuality: 85,
     );
